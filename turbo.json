@@ -17,7 +17,7 @@
       "dependsOn": ["^build"]
     },
     "//#lint:repo": {
-      "dependsOn": ["@repo/contracts#build"],
+      "dependsOn": ["@repo/contracts#build", "@repo/db#build"],
       "outputs": []
     }
   }

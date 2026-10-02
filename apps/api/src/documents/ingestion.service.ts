@@ -1,0 +1,127 @@
+import {
+  Inject,
+  Injectable,
+  Logger,
+  UnprocessableEntityException,
+  UnsupportedMediaTypeException,
+} from '@nestjs/common';
+import { InjectDrizzle } from '@nestjs/drizzle';
+
+import { ERROR_CODES, type Document } from '@repo/contracts';
+
+import type { Principal } from '../auth/principal.js';
+import type { Database } from '../database/database.js';
+
+import { EMBEDDING_PROVIDER, type EmbeddingProvider } from '../embeddings/embedding-provider.js';
+import { VectorStoreService } from '../vector-store/vector-store.service.js';
+import { chunkPages } from './chunking.js';
+import { DocumentsRepository } from './documents.repository.js';
+import { PdfTextExtractor, UnreadablePdfError } from './pdf-text-extractor.service.js';
+
+export interface UploadedPdf {
+  filename: string;
+  mimeType: string;
+  buffer: Buffer;
+}
+
+const NO_TEXT_MESSAGE = "This PDF has no selectable text; scanned documents aren't supported.";
+const UNREADABLE_MESSAGE = 'The file could not be read as a PDF.';
+const FAILED_MESSAGE = 'Processing failed. Try uploading the document again.';
+
+/**
+ * Turns an uploaded PDF into searchable chunks: store the document and its file as `processing`,
+ * extract text per page, chunk, embed, then insert every chunk and mark the document `ready` in
+ * one transaction. Any failure leaves the document `failed` with a safe message.
+ *
+ * Processing is synchronous within the upload request, but this service takes plain inputs and
+ * owns the whole pipeline so it can move to a queue worker later.
+ */
+@Injectable()
+export class IngestionService {
+  private readonly logger = new Logger(IngestionService.name);
+
+  constructor(
+    @InjectDrizzle() private readonly db: Database,
+    private readonly documents: DocumentsRepository,
+    private readonly extractor: PdfTextExtractor,
+    private readonly vectorStore: VectorStoreService,
+    @Inject(EMBEDDING_PROVIDER) private readonly embeddings: EmbeddingProvider,
+  ) {}
+
+  async ingest(principal: Principal, file: UploadedPdf): Promise<Document> {
+    const startedAt = performance.now();
+    const { organizationId } = principal;
+    const document = await this.documents.create(
+      this.db,
+      {
+        organizationId,
+        uploadedBy: principal.userId,
+        filename: file.filename,
+        mimeType: file.mimeType,
+        sizeBytes: file.buffer.byteLength,
+      },
+      file.buffer,
+    );
+    const documentId = document.id;
+
+    try {
+      let extracted;
+      try {
+        extracted = await this.extractor.extract(file.buffer);
+      } catch (error) {
+        if (!(error instanceof UnreadablePdfError)) throw error;
+        await this.documents.markFailed(organizationId, documentId, UNREADABLE_MESSAGE);
+        throw new UnsupportedMediaTypeException(UNREADABLE_MESSAGE, {
+          errorCode: ERROR_CODES.UNSUPPORTED_FILE_TYPE,
+        });
+      }
+
+      const chunks = extracted.hasText ? await chunkPages(extracted.pages) : [];
+      if (!chunks.length) {
+        await this.documents.markFailed(
+          organizationId,
+          documentId,
+          NO_TEXT_MESSAGE,
+          extracted.pageCount,
+        );
+        throw new UnprocessableEntityException(NO_TEXT_MESSAGE, {
+          errorCode: ERROR_CODES.PDF_NO_TEXT_LAYER,
+        });
+      }
+
+      const vectors = await this.embeddings.embedDocuments(chunks.map((chunk) => chunk.content));
+      await this.db.transaction(async (tx) => {
+        await this.vectorStore.insertChunks(
+          tx,
+          documentId,
+          chunks.map((chunk, i) => ({ ...chunk, embedding: vectors[i]! })),
+        );
+        await this.documents.markReady(tx, organizationId, documentId, extracted.pageCount);
+      });
+
+      this.logger.log('Document ingested', {
+        documentId,
+        pageCount: extracted.pageCount,
+        chunkCount: chunks.length,
+        durationMs: Math.round(performance.now() - startedAt),
+      });
+    } catch (error) {
+      if (
+        !(error instanceof UnsupportedMediaTypeException) &&
+        !(error instanceof UnprocessableEntityException)
+      ) {
+        this.logger.error('Document ingestion failed', {
+          documentId,
+          error: error instanceof Error ? error.name : 'unknown',
+        });
+        await this.documents
+          .markFailed(organizationId, documentId, FAILED_MESSAGE)
+          .catch(() => undefined);
+      }
+      throw error;
+    }
+
+    const view = await this.documents.getView(organizationId, documentId);
+    return view!;
+  }
+}

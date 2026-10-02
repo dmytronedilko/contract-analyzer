@@ -1,3 +1,8 @@
 packages:
   - apps/*
   - packages/*
+
+# Every dependency with an install script is decided here explicitly.
+allowBuilds:
+  # The root `prepare` script installs the git hooks instead.
+  lefthook: false

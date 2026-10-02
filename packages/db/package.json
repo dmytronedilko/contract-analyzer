@@ -18,7 +18,8 @@
     "build": "tsc -p tsconfig.build.json",
     "dev": "tsc -p tsconfig.build.json --watch --preserveWatchOutput",
     "typecheck": "tsc --noEmit",
-    "auth:generate": "pnpm dlx auth@1.7.6 generate --adapter drizzle --dialect postgresql --config scripts/auth-schema.config.ts --output src/auth-schema.ts --yes"
+    "auth:generate": "pnpm dlx auth@1.7.6 generate --adapter drizzle --dialect postgresql --config scripts/auth-schema.config.ts --output src/auth-schema.ts --yes",
+    "db:generate": "drizzle-kit generate"
   },
   "dependencies": {
     "drizzle-orm": "0.45.3",
@@ -28,6 +29,7 @@
     "@types/node": "24.13.6",
     "@types/pg": "8.23.1",
     "better-auth": "1.7.6",
+    "drizzle-kit": "0.31.11",
     "typescript": "6.0.3"
   }
 }

@@ -5,6 +5,7 @@ import { drizzle } from 'drizzle-orm/node-postgres';
 
 import type { Env } from './config/env.schema.js';
 
+import { AnalysisModule } from './analysis/analysis.module.js';
 import { AuthModule } from './auth/auth.module.js';
 import { appConfigModule } from './config/app-config.module.js';
 import { DocumentsModule } from './documents/documents.module.js';
@@ -21,6 +22,7 @@ import { DocumentsModule } from './documents/documents.module.js';
     }),
     AuthModule,
     DocumentsModule,
+    AnalysisModule,
   ],
 })
 export class AppModule {}

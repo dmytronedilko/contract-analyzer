@@ -12,6 +12,7 @@ import type { Env } from './config/env.schema.js';
 
 import { AppModule } from './app.module.js';
 import { ApiExceptionFilter } from './common/api-exception.filter.js';
+import { registerHttpPolicy } from './http/http-policy.js';
 
 async function bootstrap(): Promise<void> {
   // With an explicit adapter, application options must be the third argument.
@@ -20,6 +21,9 @@ async function bootstrap(): Promise<void> {
     routeConflictPolicy: { duplicate: 'error', shadow: 'warn' },
   });
   const config = app.get<ConfigService<Env, true>>(ConfigService);
+
+  // Request ids and the origin guard first (before CORS, so preflights are covered too), then CORS.
+  registerHttpPolicy(app, { corsOrigins: config.get('CORS_ORIGINS', { infer: true }) ?? [] });
 
   await app.register(fastifyMultipart, {
     // One PDF per request; anything larger than MAX_UPLOAD_MB is rejected while streaming.

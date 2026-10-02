@@ -72,7 +72,8 @@ export class ApiExceptionFilter implements ExceptionFilter {
 
     if (exception instanceof HttpException) {
       const status = exception.getStatus();
-      if (status >= 500) return errorBodyOf(status, 'Internal server error');
+      // Never expose 5xx details; the status text is enough (e.g. 503 from the readiness probe).
+      if (status >= 500) return errorBodyOf(status, genericMessage(status));
       const response = exception.getResponse();
       const details = typeof response === 'object' && response !== null ? response : {};
       const message =
@@ -139,6 +140,10 @@ function errorBodyOf(
 function toErrorCode(value: unknown): ErrorCode | undefined {
   const parsed = ErrorCodeSchema.safeParse(value);
   return parsed.success ? parsed.data : undefined;
+}
+
+function genericMessage(status: number): string {
+  return status === 500 ? 'Internal server error' : (STATUS_TEXT[status] ?? 'Server error');
 }
 
 /** Codes implied by the status when the error didn't declare one. */

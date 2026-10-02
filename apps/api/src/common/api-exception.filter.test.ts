@@ -8,6 +8,7 @@ import {
   Logger,
   NotFoundException,
   PayloadTooLargeException,
+  ServiceUnavailableException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { ExecutionContextHost } from '@nestjs/core/helpers/execution-context-host.js';
@@ -116,6 +117,15 @@ describe('ApiExceptionFilter.toBody', () => {
       statusCode: 500,
       message: 'Internal server error',
       error: 'Internal Server Error',
+    });
+  });
+
+  it('uses the status text for other 5xx responses', () => {
+    const exception = new ServiceUnavailableException('connection refused to 10.0.0.5');
+    expect(filter.toBody(exception)).toEqual({
+      statusCode: 503,
+      message: 'Service Unavailable',
+      error: 'Service Unavailable',
     });
   });
 

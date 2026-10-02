@@ -7,5 +7,7 @@ export default defineConfig({
   test: {
     include: ['src/**/*.test.ts'],
     environment: 'node',
+    // Applies migrations to TEST_DATABASE_URL for the integration suites.
+    globalSetup: ['src/test/global-setup.ts'],
   },
 });

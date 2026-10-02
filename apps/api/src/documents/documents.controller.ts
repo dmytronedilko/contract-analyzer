@@ -32,6 +32,7 @@ import type { Principal } from '../auth/principal.js';
 
 import { CurrentPrincipal } from '../auth/current-principal.decorator.js';
 import { RequirePermission } from '../auth/require-permission.decorator.js';
+import { CurrentRequestId } from '../http/current-request-id.decorator.js';
 import { DocumentsService } from './documents.service.js';
 import { IngestionService } from './ingestion.service.js';
 
@@ -52,6 +53,7 @@ export class DocumentsController {
   @SerializeOptions({ schema: DocumentSchema })
   upload(
     @CurrentPrincipal() principal: Principal,
+    @CurrentRequestId() requestId: string | null,
     @UploadedFile() file: UploadedMultipartFile | undefined,
   ): Promise<Document> {
     if (!file?.buffer?.byteLength) {
@@ -65,11 +67,14 @@ export class DocumentsController {
         errorCode: ERROR_CODES.UNSUPPORTED_FILE_TYPE,
       });
     }
-    return this.ingestion.ingest(principal, {
-      filename: sanitizeFilename(file.originalname),
-      mimeType: file.mimetype,
-      buffer: file.buffer,
-    });
+    return this.ingestion.ingest(
+      { principal, requestId },
+      {
+        filename: sanitizeFilename(file.originalname),
+        mimeType: file.mimetype,
+        buffer: file.buffer,
+      },
+    );
   }
 
   @Get()
@@ -117,9 +122,10 @@ export class DocumentsController {
   @RequirePermission('document:delete:own', 'document:delete:any')
   delete(
     @CurrentPrincipal() principal: Principal,
+    @CurrentRequestId() requestId: string | null,
     @Param('id', { schema: IdSchema }) id: string,
   ): Promise<void> {
-    return this.documents.delete(principal, id);
+    return this.documents.delete({ principal, requestId }, id);
   }
 }
 

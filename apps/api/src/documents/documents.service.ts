@@ -14,6 +14,7 @@ import {
 import type { Principal } from '../auth/principal.js';
 import type { Database } from '../database/database.js';
 
+import { AuditService, type AuditActor } from '../audit/audit.service.js';
 import { DocumentsRepository } from './documents.repository.js';
 
 export function documentNotFound(): NotFoundException {
@@ -27,6 +28,7 @@ export class DocumentsService {
   constructor(
     @InjectDrizzle() private readonly db: Database,
     private readonly documents: DocumentsRepository,
+    private readonly audit: AuditService,
   ) {}
 
   list(principal: Principal, query: ListDocumentsQuery): Promise<DocumentListResponse> {
@@ -57,7 +59,8 @@ export class DocumentsService {
   }
 
   /** Requires document:delete:any, or document:delete:own for the caller's own uploads. */
-  async delete(principal: Principal, id: string): Promise<void> {
+  async delete(actor: AuditActor, id: string): Promise<void> {
+    const { principal } = actor;
     const document = await this.resolve(principal, id);
     const canDelete =
       hasPermission(principal.role, 'document:delete:any') ||
@@ -72,6 +75,12 @@ export class DocumentsService {
       if (!(await this.documents.delete(tx, principal.organizationId, id))) {
         throw documentNotFound();
       }
+      await this.audit.record(tx, actor, {
+        action: 'document.delete',
+        targetType: 'document',
+        targetId: id,
+        metadata: { ownDocument: document.uploadedBy === principal.userId },
+      });
     });
   }
 }

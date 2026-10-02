@@ -15,6 +15,7 @@ import type { Principal } from '../auth/principal.js';
 
 import { CurrentPrincipal } from '../auth/current-principal.decorator.js';
 import { RequirePermission } from '../auth/require-permission.decorator.js';
+import { CurrentRequestId } from '../http/current-request-id.decorator.js';
 import { AnalysisService } from './analysis.service.js';
 
 @Controller('analysis')
@@ -27,9 +28,10 @@ export class AnalysisController {
   @SerializeOptions({ schema: AskResponseSchema })
   ask(
     @CurrentPrincipal() principal: Principal,
+    @CurrentRequestId() requestId: string | null,
     @Body({ schema: AskRequestSchema }) body: AskRequest,
   ): Promise<AskResponse> {
-    return this.analysis.ask(principal, body);
+    return this.analysis.ask({ principal, requestId }, body);
   }
 
   @Post('compare')
@@ -38,8 +40,9 @@ export class AnalysisController {
   @SerializeOptions({ schema: CompareResponseSchema })
   compare(
     @CurrentPrincipal() principal: Principal,
+    @CurrentRequestId() requestId: string | null,
     @Body({ schema: CompareRequestSchema }) body: CompareRequest,
   ): Promise<CompareResponse> {
-    return this.analysis.compare(principal, body);
+    return this.analysis.compare({ principal, requestId }, body);
   }
 }

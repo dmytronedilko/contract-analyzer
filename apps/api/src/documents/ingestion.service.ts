@@ -9,9 +9,9 @@ import { InjectDrizzle } from '@nestjs/drizzle';
 
 import { ERROR_CODES, type Document } from '@repo/contracts';
 
-import type { Principal } from '../auth/principal.js';
 import type { Database } from '../database/database.js';
 
+import { AuditService, type AuditActor } from '../audit/audit.service.js';
 import { EMBEDDING_PROVIDER, type EmbeddingProvider } from '../embeddings/embedding-provider.js';
 import { VectorStoreService } from '../vector-store/vector-store.service.js';
 import { chunkPages } from './chunking.js';
@@ -45,24 +45,34 @@ export class IngestionService {
     private readonly documents: DocumentsRepository,
     private readonly extractor: PdfTextExtractor,
     private readonly vectorStore: VectorStoreService,
+    private readonly audit: AuditService,
     @Inject(EMBEDDING_PROVIDER) private readonly embeddings: EmbeddingProvider,
   ) {}
 
-  async ingest(principal: Principal, file: UploadedPdf): Promise<Document> {
+  async ingest(actor: AuditActor, file: UploadedPdf): Promise<Document> {
     const startedAt = performance.now();
-    const { organizationId } = principal;
-    const document = await this.documents.create(
-      this.db,
-      {
-        organizationId,
-        uploadedBy: principal.userId,
-        filename: file.filename,
-        mimeType: file.mimeType,
-        sizeBytes: file.buffer.byteLength,
-      },
-      file.buffer,
-    );
-    const documentId = document.id;
+    const { organizationId, userId } = actor.principal;
+    // The upload is audited together with the row it creates.
+    const documentId = await this.db.transaction(async (tx) => {
+      const document = await this.documents.create(
+        tx,
+        {
+          organizationId,
+          uploadedBy: userId,
+          filename: file.filename,
+          mimeType: file.mimeType,
+          sizeBytes: file.buffer.byteLength,
+        },
+        file.buffer,
+      );
+      await this.audit.record(tx, actor, {
+        action: 'document.upload',
+        targetType: 'document',
+        targetId: document.id,
+        metadata: { sizeBytes: file.buffer.byteLength },
+      });
+      return document.id;
+    });
 
     try {
       let extracted;

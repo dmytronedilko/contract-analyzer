@@ -1,5 +1,6 @@
 import { ConflictException, Inject, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { InjectDrizzle } from '@nestjs/drizzle';
 
 import type { DocumentRow } from '@repo/db';
 
@@ -14,8 +15,10 @@ import {
 
 import type { Principal } from '../auth/principal.js';
 import type { Env } from '../config/env.schema.js';
+import type { Database } from '../database/database.js';
 import type { RetrievedChunk } from '../vector-store/vector-store.service.js';
 
+import { AuditService, type AuditActor } from '../audit/audit.service.js';
 import { DocumentsService } from '../documents/documents.service.js';
 import { EMBEDDING_PROVIDER, type EmbeddingProvider } from '../embeddings/embedding-provider.js';
 import { VectorStoreService } from '../vector-store/vector-store.service.js';
@@ -51,14 +54,16 @@ export class AnalysisService {
     private readonly documents: DocumentsService,
     private readonly vectorStore: VectorStoreService,
     private readonly llm: LlmService,
+    private readonly audit: AuditService,
+    @InjectDrizzle() private readonly db: Database,
     @Inject(EMBEDDING_PROVIDER) private readonly embeddings: EmbeddingProvider,
   ) {
     this.topK = config.get('RAG_TOP_K', { infer: true });
   }
 
-  async ask(principal: Principal, request: AskRequest): Promise<AskResponse> {
+  async ask(actor: AuditActor, request: AskRequest): Promise<AskResponse> {
     const startedAt = performance.now();
-    const document = await this.resolveReady(principal, request.documentId);
+    const document = await this.resolveReady(actor.principal, request.documentId);
 
     const queryVector = await this.embeddings.embedQuery(request.question);
     const sources = toSources(await this.vectorStore.search(document.id, queryVector, this.topK));
@@ -73,18 +78,27 @@ export class AnalysisService {
       }),
     );
 
+    const durationMs = Math.round(performance.now() - startedAt);
+    // Counts, flags and timing only: never the question or the answer.
+    await this.audit.record(this.db, actor, {
+      action: 'analysis.ask',
+      targetType: 'document',
+      targetId: document.id,
+      metadata: { sourceCount: sources.length, truncated: result.truncated, durationMs },
+    });
     this.logger.log('Question answered', {
       documentId: document.id,
       sources: sources.length,
       model: result.model,
       truncated: result.truncated,
-      durationMs: Math.round(performance.now() - startedAt),
+      durationMs,
     });
     return { answer: result.text, truncated: result.truncated, sources };
   }
 
-  async compare(principal: Principal, request: CompareRequest): Promise<CompareResponse> {
+  async compare(actor: AuditActor, request: CompareRequest): Promise<CompareResponse> {
     const startedAt = performance.now();
+    const { principal } = actor;
     // Resolve both before checking readiness, so a missing document is always reported as 404.
     const [documentA, documentB] = await Promise.all([
       this.documents.resolve(principal, request.documentId1),
@@ -129,6 +143,19 @@ export class AnalysisService {
       }),
     );
 
+    const durationMs = Math.round(performance.now() - startedAt);
+    await this.audit.record(this.db, actor, {
+      action: 'analysis.compare',
+      targetType: 'document',
+      targetId: documentA.id,
+      metadata: {
+        otherDocumentId: documentB.id,
+        sourceCountA: sourcesA.length,
+        sourceCountB: sourcesB.length,
+        truncated: result.truncated,
+        durationMs,
+      },
+    });
     this.logger.log('Documents compared', {
       documentIdA: documentA.id,
       documentIdB: documentB.id,
@@ -138,7 +165,7 @@ export class AnalysisService {
       counterpartsB: sourcesB.length - hitsB.length,
       model: result.model,
       truncated: result.truncated,
-      durationMs: Math.round(performance.now() - startedAt),
+      durationMs,
     });
     return {
       analysis: result.text,

@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 
+import { AuditModule } from '../audit/audit.module.js';
 import { EmbeddingsModule } from '../embeddings/embeddings.module.js';
 import { VectorStoreModule } from '../vector-store/vector-store.module.js';
 import { DocumentsController } from './documents.controller.js';
@@ -9,7 +10,7 @@ import { IngestionService } from './ingestion.service.js';
 import { PdfTextExtractor } from './pdf-text-extractor.service.js';
 
 @Module({
-  imports: [EmbeddingsModule, VectorStoreModule],
+  imports: [AuditModule, EmbeddingsModule, VectorStoreModule],
   controllers: [DocumentsController],
   providers: [DocumentsRepository, DocumentsService, IngestionService, PdfTextExtractor],
   exports: [DocumentsService],

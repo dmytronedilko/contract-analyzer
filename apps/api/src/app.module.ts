@@ -7,6 +7,7 @@ import type { Env } from './config/env.schema.js';
 
 import { AuthModule } from './auth/auth.module.js';
 import { appConfigModule } from './config/app-config.module.js';
+import { DocumentsModule } from './documents/documents.module.js';
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import { appConfigModule } from './config/app-config.module.js';
       }),
     }),
     AuthModule,
+    DocumentsModule,
   ],
 })
 export class AppModule {}

@@ -1,3 +1,4 @@
+import fastifyMultipart from '@fastify/multipart';
 import {
   ConsoleLogger,
   StandardSchemaSerializerInterceptor,
@@ -18,6 +19,16 @@ async function bootstrap(): Promise<void> {
     routeConflictPolicy: { duplicate: 'error', shadow: 'warn' },
   });
   const config = app.get<ConfigService<Env, true>>(ConfigService);
+
+  await app.register(fastifyMultipart, {
+    // One PDF per request; anything larger than MAX_UPLOAD_MB is rejected while streaming.
+    limits: {
+      fileSize: config.get('MAX_UPLOAD_MB', { infer: true }) * 1024 * 1024,
+      files: 1,
+      fields: 5,
+      parts: 6,
+    },
+  });
 
   app.useGlobalPipes(new StandardSchemaValidationPipe());
   app.useGlobalInterceptors(new StandardSchemaSerializerInterceptor(app.get(Reflector)));

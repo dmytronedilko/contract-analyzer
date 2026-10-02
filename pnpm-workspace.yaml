@@ -4,6 +4,8 @@ packages:
 
 # Every dependency with an install script is decided here explicitly.
 allowBuilds:
+  # Verifies its platform-specific native binary (API tests compile decorators with SWC).
+  '@swc/core': true
   # Verifies and links its platform-specific binary (drizzle-kit, Vitest).
   esbuild: true
   # The root `prepare` script installs the git hooks instead.

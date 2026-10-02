@@ -1,0 +1,62 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["typescript", "unicorn", "oxc", "import", "promise", "node"],
+  "categories": {
+    "correctness": "error",
+    "suspicious": "warn"
+  },
+  "options": {
+    "typeAware": true
+  },
+  "env": {
+    "builtin": true,
+    "node": true,
+    "es2024": true
+  },
+  "ignorePatterns": [
+    "**/dist/**",
+    "**/.next/**",
+    "**/coverage/**",
+    "**/node_modules/**",
+    "packages/db/drizzle/**",
+    "**/next-env.d.ts"
+  ],
+  "rules": {
+    "typescript/no-floating-promises": "error",
+    "typescript/no-misused-promises": ["error", { "checksVoidReturn": { "attributes": false } }],
+    "typescript/await-thenable": "error",
+    "import/no-cycle": "error"
+  },
+  "overrides": [
+    {
+      "files": ["apps/api/**"],
+      "rules": {
+        "typescript/consistent-type-imports": "off",
+        "typescript/no-extraneous-class": ["error", { "allowWithDecorator": true }],
+        "no-console": "error"
+      }
+    },
+    {
+      "files": ["packages/db/src/migrate.ts"],
+      "rules": {
+        "no-console": "off"
+      }
+    },
+    {
+      "files": ["apps/web/**"],
+      "plugins": ["react", "jsx-a11y", "nextjs"],
+      "env": {
+        "browser": true
+      },
+      "rules": {
+        "react/rules-of-hooks": "error",
+        "react/exhaustive-deps": "warn",
+        "react/react-in-jsx-scope": "off"
+      }
+    },
+    {
+      "files": ["**/*.test.ts", "**/*.test.tsx", "**/*.spec.ts"],
+      "plugins": ["vitest"]
+    }
+  ]
+}

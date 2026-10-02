@@ -2,21 +2,29 @@
   "name": "contract-analyzer",
   "private": true,
   "type": "module",
-  "packageManager": "pnpm@11.28.0",
-  "engines": {
-    "node": ">=24 <25",
-    "pnpm": ">=11 <12"
-  },
   "scripts": {
     "dev": "turbo run dev",
     "build": "turbo run build",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
+    "lint": "turbo run lint:repo",
+    "lint:repo": "oxlint --no-error-on-unmatched-pattern",
+    "lint:fix": "oxlint --fix",
+    "format": "oxfmt",
+    "format:check": "oxfmt --check",
     "services:up": "docker compose up -d --wait db oidc",
     "db:generate": "pnpm --filter @repo/db run db:generate",
     "db:migrate": "pnpm --filter @repo/db run db:migrate"
   },
   "devDependencies": {
+    "oxfmt": "0.70.0",
+    "oxlint": "1.85.0",
+    "oxlint-tsgolint": "7.0.2003",
     "turbo": "2.11.4"
-  }
+  },
+  "engines": {
+    "node": ">=24 <25",
+    "pnpm": ">=11 <12"
+  },
+  "packageManager": "pnpm@11.28.0"
 }

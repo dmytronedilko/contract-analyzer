@@ -5,6 +5,7 @@ import { drizzle } from 'drizzle-orm/node-postgres';
 
 import type { Env } from './config/env.schema.js';
 
+import { AuthModule } from './auth/auth.module.js';
 import { appConfigModule } from './config/app-config.module.js';
 
 @Module({
@@ -17,6 +18,7 @@ import { appConfigModule } from './config/app-config.module.js';
         connection: { connectionString: config.get('DATABASE_URL', { infer: true }) },
       }),
     }),
+    AuthModule,
   ],
 })
 export class AppModule {}

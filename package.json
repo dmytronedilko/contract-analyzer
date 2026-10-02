@@ -1,0 +1,22 @@
+{
+  "name": "contract-analyzer",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.28.0",
+  "engines": {
+    "node": ">=24 <25",
+    "pnpm": ">=11 <12"
+  },
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "services:up": "docker compose up -d --wait db oidc",
+    "db:generate": "pnpm --filter @repo/db run db:generate",
+    "db:migrate": "pnpm --filter @repo/db run db:migrate"
+  },
+  "devDependencies": {
+    "turbo": "2.11.4"
+  }
+}

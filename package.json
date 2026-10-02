@@ -27,7 +27,8 @@
     "oxfmt": "0.70.0",
     "oxlint": "1.85.0",
     "oxlint-tsgolint": "7.0.2003",
-    "turbo": "2.11.4"
+    "turbo": "2.11.4",
+    "typescript": "6.0.3"
   },
   "engines": {
     "node": ">=24 <25",

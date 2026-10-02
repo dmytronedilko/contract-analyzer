@@ -11,6 +11,7 @@ import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fa
 import type { Env } from './config/env.schema.js';
 
 import { AppModule } from './app.module.js';
+import { ApiExceptionFilter } from './common/api-exception.filter.js';
 
 async function bootstrap(): Promise<void> {
   // With an explicit adapter, application options must be the third argument.
@@ -32,6 +33,7 @@ async function bootstrap(): Promise<void> {
 
   app.useGlobalPipes(new StandardSchemaValidationPipe());
   app.useGlobalInterceptors(new StandardSchemaSerializerInterceptor(app.get(Reflector)));
+  app.useGlobalFilters(new ApiExceptionFilter());
   app.enableShutdownHooks();
 
   // Fastify's default host (localhost) is unreachable from other containers.

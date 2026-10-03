@@ -25,7 +25,8 @@
     "typescript/no-floating-promises": "error",
     "typescript/no-misused-promises": ["error", { "checksVoidReturn": { "attributes": false } }],
     "typescript/await-thenable": "error",
-    "import/no-cycle": "error"
+    "import/no-cycle": "error",
+    "import/no-unassigned-import": ["warn", { "allow": ["**/*.css"] }]
   },
   "overrides": [
     {

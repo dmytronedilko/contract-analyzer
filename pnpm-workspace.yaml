@@ -2,6 +2,25 @@ packages:
   - apps/*
   - packages/*
 
+# Supply-chain hardening, on top of pnpm 11's defaults.
+# Only install versions published at least 7 days ago (matches the Dependabot cooldown): most
+# malicious releases are detected and pulled within days.
+minimumReleaseAge: 10080
+# Temporary entries for urgent security fixes only (added by `pnpm audit --fix`); remove each once
+# the version is older than the window. See SECURITY.md.
+minimumReleaseAgeExclude: []
+# Refuse a version whose publish trust (provenance, trusted publisher) is weaker than earlier ones.
+trustPolicy: no-downgrade
+# Reviewed exceptions: versions published without provenance after a newer major had it.
+trustPolicyExclude:
+  # npm's 6.x backport of the ReDoS fix (2023), published from the old branch without provenance;
+  # required by @babel/core through the shadcn CLI (a dev dependency).
+  - 'semver@6.3.1'
+# Transitive dependencies may only come from the registry, never git URLs or tarballs.
+blockExoticSubdeps: true
+# Fail the install when a dependency's build script hasn't been decided in allowBuilds.
+strictDepBuilds: true
+
 # Every dependency with an install script is decided here explicitly.
 allowBuilds:
   # Verifies its platform-specific native binary (API tests compile decorators with SWC).
@@ -10,3 +29,8 @@ allowBuilds:
   esbuild: true
   # The root `prepare` script installs the git hooks instead.
   lefthook: false
+
+# Forces patched versions of vulnerable transitive dependencies their parents pin.
+overrides:
+  # drizzle-kit pins 0.25 and its @esbuild-kit loader 0.18 (GHSA-67mh-4wv8-2f99, GHSA-vfj7-8cjw-p6xm).
+  esbuild: ^0.28.1

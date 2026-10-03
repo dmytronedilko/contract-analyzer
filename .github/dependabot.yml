@@ -1,0 +1,112 @@
+# Dependabot keeps dependencies, actions and image digests current.
+# Every entry: weekly on Monday 06:00 UTC, labelled `dependencies`, conventional commit messages,
+# and a cooldown no shorter than pnpm's 7-day minimumReleaseAge. The cooldown applies to version
+# updates only; security updates are raised immediately.
+version: 2
+
+updates:
+  - package-ecosystem: npm
+    # The root lockfile covers every workspace package.
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: '06:00'
+      timezone: Etc/UTC
+    labels: [dependencies]
+    open-pull-requests-limit: 10
+    commit-message:
+      prefix: build
+      prefix-development: chore
+      include: scope
+    cooldown:
+      default-days: 7
+      semver-major-days: 14
+    ignore:
+      # The NestJS 12 tooling is on TypeScript 6.
+      - dependency-name: typescript
+        update-types: ['version-update:semver-major']
+      # Tracks the Node major in .nvmrc (24).
+      - dependency-name: '@types/node'
+        update-types: ['version-update:semver-major']
+    groups:
+      # Packages that must move together, all update types. A dependency joins the first group
+      # that matches it; majors outside these groups get individual pull requests.
+      nestjs:
+        patterns: ['@nestjs/*']
+      drizzle:
+        patterns: [drizzle-orm, drizzle-kit]
+      better-auth:
+        patterns: [better-auth, '@better-auth/*']
+      oxc:
+        patterns: [oxlint, oxlint-tsgolint, oxfmt]
+      next-react:
+        patterns: [next, react, react-dom, '@types/react*']
+      types:
+        patterns: ['@types/*']
+      minor-and-patch:
+        patterns: ['*']
+        update-types: [minor, patch]
+      # All security fixes in one pull request.
+      security:
+        applies-to: security-updates
+        patterns: ['*']
+
+  - package-ecosystem: github-actions
+    # Workflows and the composite setup action. Dependabot updates the SHA pins and their
+    # version comments.
+    directories: [/, /.github/actions/*]
+    schedule:
+      interval: weekly
+      day: monday
+      time: '06:00'
+      timezone: Etc/UTC
+    labels: [dependencies]
+    open-pull-requests-limit: 10
+    commit-message:
+      prefix: ci
+      include: scope
+    cooldown:
+      default-days: 7
+      semver-major-days: 14
+    groups:
+      actions:
+        patterns: ['*']
+
+  - package-ecosystem: docker
+    # Base image digests in the Dockerfiles.
+    directories: [/apps/api, /apps/web]
+    schedule:
+      interval: weekly
+      day: monday
+      time: '06:00'
+      timezone: Etc/UTC
+    labels: [dependencies]
+    open-pull-requests-limit: 10
+    commit-message:
+      prefix: build
+      include: scope
+    cooldown:
+      default-days: 7
+      semver-major-days: 14
+    ignore:
+      # Node majors move with .nvmrc and engines, deliberately.
+      - dependency-name: node
+        update-types: ['version-update:semver-major']
+
+  - package-ecosystem: docker-compose
+    # pgvector and the mock OIDC provider.
+    directories: [/]
+    schedule:
+      interval: weekly
+      day: monday
+      time: '06:00'
+      timezone: Etc/UTC
+    labels: [dependencies]
+    open-pull-requests-limit: 10
+    commit-message:
+      prefix: build
+      include: scope
+    cooldown:
+      default-days: 7
+      semver-major-days: 14

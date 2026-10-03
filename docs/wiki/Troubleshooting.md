@@ -60,7 +60,7 @@ trailing slash, and `https` unless they are `http://localhost`.
 
 ```sh
 docker compose ps
-docker inspect --format '{{json .State.Health}}' contract-analyzer-api-1 | jq
+docker inspect contract-analyzer-api-1 | jq '.[0].State.Health'
 docker compose logs api
 ```
 

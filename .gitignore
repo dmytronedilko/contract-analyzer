@@ -12,3 +12,7 @@ next-env.d.ts
 
 .DS_Store
 *.log
+
+# Agent guidance files that `next dev` (re)generates
+apps/web/AGENTS.md
+apps/web/CLAUDE.md

@@ -56,6 +56,12 @@
       }
     },
     {
+      "files": ["apps/web/components/ui/**"],
+      "rules": {
+        "typescript/no-unsafe-type-assertion": "off"
+      }
+    },
+    {
       "files": ["**/*.test.ts", "**/*.test.tsx", "**/*.spec.ts"],
       "plugins": ["vitest"]
     }

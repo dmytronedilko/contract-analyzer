@@ -1,0 +1,31 @@
+# CI smoke test: run the images CI just built (tagged local/*:ci) instead of building.
+#   docker compose -f docker-compose.yml -f docker-compose.ci.yml up -d --no-build --wait
+# The smoke test never calls the AI providers or signs in, so their settings are dummies,
+# and Observe stays disabled.
+services:
+  migrate:
+    image: local/api:ci
+    pull_policy: never
+    build: !reset null
+
+  api:
+    image: local/api:ci
+    pull_policy: never
+    build: !reset null
+    environment:
+      ANTHROPIC_API_KEY: ci-dummy-anthropic-key
+      VOYAGE_API_KEY: ci-dummy-voyage-key
+      OBSERVE_APP_KEY: ''
+      OBSERVE_APP_SECRET: ''
+
+  web:
+    image: local/web:ci
+    pull_policy: never
+    build: !reset null
+    environment:
+      BETTER_AUTH_SECRET: ci-dummy-secret-ci-dummy-secret-ci-dummy
+      APP_URL: http://localhost:3000
+      AUTH_OIDC_NAME: Mock SSO
+      AUTH_OIDC_ISSUER: http://oidc:8080/default
+      AUTH_OIDC_CLIENT_ID: contract-analyzer
+      AUTH_OIDC_CLIENT_SECRET: mock-secret

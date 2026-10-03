@@ -1,0 +1,110 @@
+# Local stack.
+#   pnpm services:up          db + mock OIDC provider only; run the apps with `pnpm dev`.
+#   docker compose up --build the whole stack in containers (needs apps/*/.env).
+# CI layers docker-compose.ci.yml on top to smoke-test the images it just built.
+name: contract-analyzer
+
+services:
+  db:
+    image: pgvector/pgvector:pg17@sha256:ac08538c6f8b9904c33c8224c5e5706dbe760aca29db1d096972b4052c22a75d
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: contracts
+    ports:
+      - '127.0.0.1:5432:5432'
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres -d contracts']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  # Mock OIDC provider, used as the generic OIDC identity provider in development and CI.
+  # Its login form accepts any username and issues a verified <username>@example.com email.
+  oidc:
+    image: ghcr.io/navikt/mock-oauth2-server:6.0.3@sha256:250e04413e2fc7877d4cb38ecd74d3ecb1a40aae3a9bdad96d1c593e59fee95e
+    ports:
+      - '127.0.0.1:8080:8080'
+    environment:
+      JSON_CONFIG: >-
+        {
+          "interactiveLogin": true,
+          "tokenCallbacks": [{
+            "issuerId": "default",
+            "tokenExpiry": 3600,
+            "requestMappings": [{
+              "requestParam": "client_id",
+              "match": "*",
+              "claims": {
+                "sub": "$${subject}",
+                "email": "$${subject}@example.com",
+                "email_verified": true,
+                "name": "$${subject}"
+              }
+            }]
+          }]
+        }
+
+  # One-off: applies migrations with the API image, then exits.
+  migrate:
+    image: local/api:dev
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    command: ['node', 'node_modules/@repo/db/dist/migrate.js']
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@db:5432/contracts
+    depends_on:
+      db:
+        condition: service_healthy
+
+  api:
+    image: local/api:dev
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    env_file:
+      - path: apps/api/.env
+        required: false
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgres://postgres:postgres@db:5432/contracts
+      # Tokens are minted by the web app and verified against its JWKS.
+      AUTH_JWKS_URL: http://web:3000/api/auth/jwks
+      AUTH_ISSUER: http://localhost:3000
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    # Not published: only the web app talks to the API. The image's healthcheck probes
+    # /health/ready.
+
+  web:
+    image: local/web:dev
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    env_file:
+      - path: apps/web/.env
+        required: false
+    environment:
+      NODE_ENV: production
+      BACKEND_URL: http://api:3001
+      DATABASE_URL: postgres://postgres:postgres@db:5432/contracts
+      APP_URL: http://localhost:3000
+      # Reachable from the web container. Browsers can't resolve "oidc", so signing in
+      # through the containerized stack needs a real provider; day to day, run the apps on
+      # the host with `pnpm dev`, where the issuer is http://localhost:8080/default for both.
+      AUTH_OIDC_ISSUER: http://oidc:8080/default
+    ports:
+      - '127.0.0.1:3000:3000'
+    depends_on:
+      api:
+        condition: service_healthy
+      oidc:
+        condition: service_started
+    # The image's healthcheck probes /api/health (which checks the API).
+
+volumes:
+  db-data:

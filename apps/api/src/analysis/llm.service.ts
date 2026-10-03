@@ -5,6 +5,8 @@ import { ConfigService } from '@nestjs/config';
 import type { Env } from '../config/env.schema.js';
 
 import { AiProviderError } from '../common/ai-provider.error.js';
+import { SPANS, SUMMARIES } from '../observability/telemetry-names.js';
+import { TelemetryService } from '../telemetry/telemetry.service.js';
 
 /** Long enough for a full comparison table; adaptive thinking also counts toward it. */
 const MAX_TOKENS = 16_000;
@@ -44,16 +46,68 @@ export class LlmService {
   private readonly client: Anthropic;
   readonly model: string;
 
-  constructor(config: ConfigService<Env, true>) {
+  constructor(
+    config: ConfigService<Env, true>,
+    private readonly telemetry: TelemetryService,
+  ) {
     this.model = config.get('ANTHROPIC_MODEL', { infer: true });
     this.client = new Anthropic({
       apiKey: config.get('ANTHROPIC_API_KEY', { infer: true }),
       timeout: REQUEST_TIMEOUT_MS,
       maxRetries: MAX_RETRIES,
+      fetch: this.observedFetch,
     });
   }
 
-  async generate(operation: LlmOperation, system: string, user: string): Promise<LlmResult> {
+  /**
+   * Records responses the SDK will retry (429, 5xx) as handled errors: they would otherwise never
+   * reach Observe. A failure on the final attempt surfaces as the request's own error instead.
+   */
+  private readonly observedFetch: typeof fetch = async (input, init) => {
+    const response = await fetch(input, init);
+    if (response.status === 429 || response.status >= 500) {
+      this.telemetry.captureError(new Error(`Anthropic responded HTTP ${response.status}`), {
+        provider: 'anthropic',
+        status: response.status,
+      });
+    }
+    return response;
+  };
+
+  generate(operation: LlmOperation, system: string, user: string): Promise<LlmResult> {
+    return this.telemetry.span(
+      SPANS.LLM_GENERATE,
+      async (span) => {
+        const startedAt = performance.now();
+        const result = await this.call(operation, system, user);
+        span.addTags({
+          model: result.model,
+          inputTokens: result.inputTokens,
+          outputTokens: result.outputTokens,
+          stopReason: result.stopReason,
+        });
+        this.telemetry.observe(
+          operation === 'ask' ? SUMMARIES.LLM_ASK_DURATION_MS : SUMMARIES.LLM_COMPARE_DURATION_MS,
+          performance.now() - startedAt,
+          `Claude latency for ${operation} requests, in milliseconds`,
+        );
+        this.telemetry.observe(
+          SUMMARIES.LLM_INPUT_TOKENS,
+          result.inputTokens,
+          'Input tokens per Claude call',
+        );
+        this.telemetry.observe(
+          SUMMARIES.LLM_OUTPUT_TOKENS,
+          result.outputTokens,
+          'Output tokens per Claude call',
+        );
+        return result;
+      },
+      { operation, model: this.model },
+    );
+  }
+
+  private async call(operation: LlmOperation, system: string, user: string): Promise<LlmResult> {
     const withFallbacks = DEFAULT_FALLBACK_MODELS.has(this.model);
     let response: Anthropic.Beta.BetaMessage;
     try {

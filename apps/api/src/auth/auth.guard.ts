@@ -12,6 +12,8 @@ import { Reflector } from '@nestjs/core';
 
 import { ERROR_CODES } from '@repo/contracts';
 
+import { COUNTERS } from '../observability/telemetry-names.js';
+import { TelemetryService } from '../telemetry/telemetry.service.js';
 import { MembershipService } from './membership.service.js';
 import { IS_PUBLIC_KEY } from './public.decorator.js';
 import { TokenVerifier } from './token-verifier.service.js';
@@ -30,6 +32,7 @@ export class AuthGuard implements CanActivate {
     private readonly reflector: Reflector,
     private readonly tokens: TokenVerifier,
     private readonly memberships: MembershipService,
+    private readonly telemetry: TelemetryService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -61,6 +64,7 @@ export class AuthGuard implements CanActivate {
     }
 
     if (!verified.organizationId) {
+      this.denied();
       throw new ForbiddenException('No active organization', {
         errorCode: ERROR_CODES.NO_ACTIVE_ORGANIZATION,
       });
@@ -68,6 +72,7 @@ export class AuthGuard implements CanActivate {
 
     const role = await this.memberships.findRole(verified.userId, verified.organizationId);
     if (!role) {
+      this.denied();
       throw new ForbiddenException('You are not a member of this organization', {
         errorCode: ERROR_CODES.FORBIDDEN,
       });
@@ -82,7 +87,12 @@ export class AuthGuard implements CanActivate {
     return true;
   }
 
+  private denied(): void {
+    this.telemetry.increment(COUNTERS.AUTH_DENIED, '401 and 403 responses from the auth guards');
+  }
+
   private unauthenticated(): UnauthorizedException {
+    this.denied();
     return new UnauthorizedException('Authentication required', {
       errorCode: ERROR_CODES.UNAUTHENTICATED,
     });

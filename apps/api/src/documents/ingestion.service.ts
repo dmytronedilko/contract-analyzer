@@ -13,6 +13,9 @@ import type { Database } from '../database/database.js';
 
 import { AuditService, type AuditActor } from '../audit/audit.service.js';
 import { EMBEDDING_PROVIDER, type EmbeddingProvider } from '../embeddings/embedding-provider.js';
+import { VoyageEmbeddingProvider } from '../embeddings/voyage-embedding.provider.js';
+import { COUNTERS, SPANS, SUMMARIES } from '../observability/telemetry-names.js';
+import { TelemetryService, type SpanTagger } from '../telemetry/telemetry.service.js';
 import { VectorStoreService } from '../vector-store/vector-store.service.js';
 import { chunkPages } from './chunking.js';
 import { DocumentsRepository } from './documents.repository.js';
@@ -46,6 +49,7 @@ export class IngestionService {
     private readonly extractor: PdfTextExtractor,
     private readonly vectorStore: VectorStoreService,
     private readonly audit: AuditService,
+    private readonly telemetry: TelemetryService,
     @Inject(EMBEDDING_PROVIDER) private readonly embeddings: EmbeddingProvider,
   ) {}
 
@@ -75,47 +79,13 @@ export class IngestionService {
     });
 
     try {
-      let extracted;
-      try {
-        extracted = await this.extractor.extract(file.buffer);
-      } catch (error) {
-        if (!(error instanceof UnreadablePdfError)) throw error;
-        await this.documents.markFailed(organizationId, documentId, UNREADABLE_MESSAGE);
-        throw new UnsupportedMediaTypeException(UNREADABLE_MESSAGE, {
-          errorCode: ERROR_CODES.UNSUPPORTED_FILE_TYPE,
-        });
-      }
-
-      const chunks = extracted.hasText ? await chunkPages(extracted.pages) : [];
-      if (!chunks.length) {
-        await this.documents.markFailed(
-          organizationId,
-          documentId,
-          NO_TEXT_MESSAGE,
-          extracted.pageCount,
-        );
-        throw new UnprocessableEntityException(NO_TEXT_MESSAGE, {
-          errorCode: ERROR_CODES.PDF_NO_TEXT_LAYER,
-        });
-      }
-
-      const vectors = await this.embeddings.embedDocuments(chunks.map((chunk) => chunk.content));
-      await this.db.transaction(async (tx) => {
-        await this.vectorStore.insertChunks(
-          tx,
-          documentId,
-          chunks.map((chunk, i) => ({ ...chunk, embedding: vectors[i]! })),
-        );
-        await this.documents.markReady(tx, organizationId, documentId, extracted.pageCount);
-      });
-
-      this.logger.log('Document ingested', {
-        documentId,
-        pageCount: extracted.pageCount,
-        chunkCount: chunks.length,
-        durationMs: Math.round(performance.now() - startedAt),
-      });
+      await this.telemetry.span(
+        SPANS.INGEST_PDF,
+        (span) => this.process(organizationId, documentId, file, span),
+        { documentId },
+      );
     } catch (error) {
+      this.telemetry.increment(COUNTERS.INGEST_FAILED, 'Uploads that ended in status failed');
       if (
         !(error instanceof UnsupportedMediaTypeException) &&
         !(error instanceof UnprocessableEntityException)
@@ -128,10 +98,73 @@ export class IngestionService {
           .markFailed(organizationId, documentId, FAILED_MESSAGE)
           .catch(() => undefined);
       }
+      // Rethrown, so Observe records it once as the request's error; no captureError here.
       throw error;
     }
 
+    const durationMs = Math.round(performance.now() - startedAt);
+    this.telemetry.observe(
+      SUMMARIES.INGEST_DURATION_MS,
+      durationMs,
+      'Upload processing time, in milliseconds',
+    );
     const view = await this.documents.getView(organizationId, documentId);
     return view!;
+  }
+
+  /** Extract, chunk, embed and store; throws the client errors for unreadable or scanned PDFs. */
+  private async process(
+    organizationId: string,
+    documentId: string,
+    file: UploadedPdf,
+    span: SpanTagger,
+  ): Promise<void> {
+    const startedAt = performance.now();
+    let extracted;
+    try {
+      extracted = await this.extractor.extract(file.buffer);
+    } catch (error) {
+      if (!(error instanceof UnreadablePdfError)) throw error;
+      await this.documents.markFailed(organizationId, documentId, UNREADABLE_MESSAGE);
+      throw new UnsupportedMediaTypeException(UNREADABLE_MESSAGE, {
+        errorCode: ERROR_CODES.UNSUPPORTED_FILE_TYPE,
+      });
+    }
+    span.addTags({ pageCount: extracted.pageCount });
+
+    const chunks = extracted.hasText ? await chunkPages(extracted.pages) : [];
+    if (!chunks.length) {
+      await this.documents.markFailed(
+        organizationId,
+        documentId,
+        NO_TEXT_MESSAGE,
+        extracted.pageCount,
+      );
+      throw new UnprocessableEntityException(NO_TEXT_MESSAGE, {
+        errorCode: ERROR_CODES.PDF_NO_TEXT_LAYER,
+      });
+    }
+    span.addTags({
+      chunkCount: chunks.length,
+      batches: VoyageEmbeddingProvider.batchCount(chunks.length),
+    });
+
+    const vectors = await this.embeddings.embedDocuments(chunks.map((chunk) => chunk.content));
+    await this.db.transaction(async (tx) => {
+      await this.vectorStore.insertChunks(
+        tx,
+        documentId,
+        chunks.map((chunk, i) => ({ ...chunk, embedding: vectors[i]! })),
+      );
+      await this.documents.markReady(tx, organizationId, documentId, extracted.pageCount);
+    });
+
+    this.telemetry.observe(SUMMARIES.INGEST_CHUNKS, chunks.length, 'Chunks per ingested document');
+    this.logger.log('Document ingested', {
+      documentId,
+      pageCount: extracted.pageCount,
+      chunkCount: chunks.length,
+      durationMs: Math.round(performance.now() - startedAt),
+    });
   }
 }

@@ -14,6 +14,7 @@ import {
 import type { Principal } from '../auth/principal.js';
 
 import { CurrentPrincipal } from '../auth/current-principal.decorator.js';
+import { RateLimit } from '../auth/rate-limit.js';
 import { RequirePermission } from '../auth/require-permission.decorator.js';
 import { CurrentRequestId } from '../http/current-request-id.decorator.js';
 import { AnalysisService } from './analysis.service.js';
@@ -25,6 +26,7 @@ export class AnalysisController {
   @Post('ask')
   @HttpCode(HttpStatus.OK)
   @RequirePermission('analysis:run')
+  @RateLimit('analysis')
   @SerializeOptions({ schema: AskResponseSchema })
   ask(
     @CurrentPrincipal() principal: Principal,
@@ -37,6 +39,7 @@ export class AnalysisController {
   @Post('compare')
   @HttpCode(HttpStatus.OK)
   @RequirePermission('analysis:run')
+  @RateLimit('analysis')
   @SerializeOptions({ schema: CompareResponseSchema })
   compare(
     @CurrentPrincipal() principal: Principal,

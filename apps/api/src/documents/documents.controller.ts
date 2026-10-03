@@ -31,6 +31,7 @@ import {
 import type { Principal } from '../auth/principal.js';
 
 import { CurrentPrincipal } from '../auth/current-principal.decorator.js';
+import { RateLimit } from '../auth/rate-limit.js';
 import { RequirePermission } from '../auth/require-permission.decorator.js';
 import { CurrentRequestId } from '../http/current-request-id.decorator.js';
 import { DocumentsService } from './documents.service.js';
@@ -49,6 +50,7 @@ export class DocumentsController {
   /** Multipart upload with a single `file` field; size and count limits are set in main.ts. */
   @Post('upload')
   @RequirePermission('document:upload')
+  @RateLimit('uploads')
   @UseInterceptors(FileInterceptor('file'))
   @SerializeOptions({ schema: DocumentSchema })
   upload(

@@ -38,6 +38,12 @@ export function configuredProviders(env: ServerEnv = serverEnv()): IdentityProvi
   return providers;
 }
 
+/** Mirrors allowUserToCreateOrganization, so the UI only offers what the server allows. */
+export function canCreateOrganization(email: string, env: ServerEnv = serverEnv()): boolean {
+  const creators = env.AUTH_ORG_CREATOR_EMAILS ?? [];
+  return creators.length === 0 || creators.includes(email.toLowerCase());
+}
+
 /** Error codes shown on /sign-in (see app/(auth)/sign-in). */
 export const SIGN_IN_ERRORS = {
   emailNotVerified: 'email_not_verified',
@@ -114,7 +120,6 @@ async function assertNotLastOwner(organizationId: string, memberRole: string): P
 }
 
 function createAuth(env: ServerEnv) {
-  const creators = env.AUTH_ORG_CREATOR_EMAILS ?? [];
   const socialProviders: BetterAuthOptions['socialProviders'] = {};
   if (env.AUTH_MICROSOFT_CLIENT_ID && env.AUTH_MICROSOFT_CLIENT_SECRET) {
     socialProviders.microsoft = {
@@ -257,8 +262,7 @@ function createAuth(env: ServerEnv) {
         ac,
         roles,
         creatorRole: 'owner',
-        allowUserToCreateOrganization: (user) =>
-          creators.length === 0 || creators.includes(user.email.toLowerCase()),
+        allowUserToCreateOrganization: (user) => canCreateOrganization(user.email, env),
         invitationExpiresIn: 7 * DAY,
         // There is no email infrastructure: the UI shows a copyable invite link instead.
         sendInvitationEmail: async () => {},

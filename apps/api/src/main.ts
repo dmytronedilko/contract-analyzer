@@ -7,10 +7,13 @@ import type { Env } from './config/env.schema.js';
 
 import { AppModule } from './app.module.js';
 import { configureApp } from './configure-app.js';
+import { observeEnabled, ObserveInstrument } from './observability/observe.js';
 
 async function bootstrap(): Promise<void> {
   // With an explicit adapter, application options must be the third argument.
   const app = await NestFactory.create<NestFastifyApplication>(AppModule, new FastifyAdapter(), {
+    // Skipped entirely when Observe is disabled (no account, tests, CI).
+    ...(observeEnabled ? { instrument: ObserveInstrument } : {}),
     logger: new ConsoleLogger({ json: process.env.NODE_ENV === 'production' }),
     routeConflictPolicy: { duplicate: 'error', shadow: 'warn' },
   });

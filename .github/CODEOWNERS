@@ -1,0 +1,32 @@
+# Code owners review every change to the paths they own (the main ruleset requires a code-owner
+# approval). Later rules take precedence over earlier ones. Every area currently has one owner;
+# the areas stay separate so each can be handed to a team (e.g. @org/security) later.
+
+# Everything, including the documentation.
+*                                                @dmytronedilko
+/docs/wiki/                                      @dmytronedilko
+
+# Delivery, CI/CD, repository settings and tooling.
+/.github/                                        @dmytronedilko
+/scripts/github/                                 @dmytronedilko
+/apps/api/Dockerfile                             @dmytronedilko
+/apps/web/Dockerfile                             @dmytronedilko
+/docker-bake.hcl                                 @dmytronedilko
+/lefthook.yml                                    @dmytronedilko
+/commitlint.config.mjs                           @dmytronedilko
+/cliff.toml                                      @dmytronedilko
+/docs/wiki/Security.md                           @dmytronedilko
+/docs/wiki/Repository-Settings.md                @dmytronedilko
+
+# Prompts: changing them changes the application's legal behavior.
+/apps/api/src/analysis/prompts.ts                @dmytronedilko
+/docs/wiki/Prompt-Design.md                      @dmytronedilko
+
+# Authentication, authorization and tenant isolation.
+/apps/web/lib/auth.ts                            @dmytronedilko
+/apps/web/lib/auth-client.ts                     @dmytronedilko
+/apps/web/app/api/auth/                          @dmytronedilko
+/apps/api/src/auth/                              @dmytronedilko
+/packages/db/src/auth-schema.ts                  @dmytronedilko
+/packages/contracts/src/permissions.ts           @dmytronedilko
+/docs/wiki/Authentication-and-Authorization.md   @dmytronedilko

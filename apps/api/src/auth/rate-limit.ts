@@ -3,6 +3,7 @@ import type { FastifyReply } from 'fastify';
 import {
   HttpException,
   HttpStatus,
+  Inject,
   Injectable,
   SetMetadata,
   type ExecutionContext,
@@ -18,6 +19,9 @@ import {
 import { ERROR_CODES } from '@repo/contracts';
 
 import type { Env } from '../config/env.schema.js';
+
+import { COUNTERS } from '../observability/telemetry-names.js';
+import { TelemetryService } from '../telemetry/telemetry.service.js';
 
 export type RateLimitName = 'analysis' | 'uploads';
 
@@ -56,6 +60,9 @@ export function rateLimitOptions(config: ConfigService<Env, true>): ThrottlerMod
  */
 @Injectable()
 export class UserThrottlerGuard extends ThrottlerGuard {
+  // Property injection: the base constructor's parameters are injected by the throttler module.
+  @Inject(TelemetryService) private readonly telemetry!: TelemetryService;
+
   protected override async handleRequest(requestProps: ThrottlerRequest): Promise<boolean> {
     const name = this.reflector.getAllAndOverride<RateLimitName | undefined>(RATE_LIMIT_KEY, [
       requestProps.context.getHandler(),
@@ -82,6 +89,10 @@ export class UserThrottlerGuard extends ThrottlerGuard {
     context: ExecutionContext,
     detail: ThrottlerLimitDetail,
   ): Promise<void> {
+    this.telemetry.increment(
+      COUNTERS.RATELIMIT_REJECTED,
+      'Requests rejected by per-user rate limits',
+    );
     const retryAfter = Math.max(1, Math.ceil(detail.timeToBlockExpire));
     context.switchToHttp().getResponse<FastifyReply>().header('retry-after', String(retryAfter));
     throw new HttpException(

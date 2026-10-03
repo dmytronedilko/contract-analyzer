@@ -11,6 +11,8 @@ import { Reflector } from '@nestjs/core';
 
 import { ERROR_CODES, hasPermission, type Permission } from '@repo/contracts';
 
+import { COUNTERS } from '../observability/telemetry-names.js';
+import { TelemetryService } from '../telemetry/telemetry.service.js';
 import { IS_PUBLIC_KEY } from './public.decorator.js';
 import { REQUIRED_PERMISSIONS_KEY } from './require-permission.decorator.js';
 
@@ -23,7 +25,10 @@ import { REQUIRED_PERMISSIONS_KEY } from './require-permission.decorator.js';
 export class PermissionsGuard implements CanActivate {
   private readonly logger = new Logger(PermissionsGuard.name);
 
-  constructor(private readonly reflector: Reflector) {}
+  constructor(
+    private readonly reflector: Reflector,
+    private readonly telemetry: TelemetryService,
+  ) {}
 
   canActivate(context: ExecutionContext): boolean {
     const targets = [context.getHandler(), context.getClass()];
@@ -50,6 +55,7 @@ export class PermissionsGuard implements CanActivate {
   }
 
   private forbidden(): ForbiddenException {
+    this.telemetry.increment(COUNTERS.AUTH_DENIED, '401 and 403 responses from the auth guards');
     return new ForbiddenException("You don't have permission to do this", {
       errorCode: ERROR_CODES.FORBIDDEN,
     });

@@ -8,6 +8,7 @@ import { ERROR_CODES, PERMISSIONS, ROLES, ROLE_PERMISSIONS, type Role } from '@r
 
 import type { Principal } from './principal.js';
 
+import { TelemetryModule } from '../telemetry/telemetry.module.js';
 import { testEnv } from '../test/env.js';
 import { TestTokens } from '../test/tokens.js';
 import { AuthModule } from './auth.module.js';
@@ -100,6 +101,7 @@ describe('authentication and authorization', () => {
     const moduleRef = await Test.createTestingModule({
       imports: [
         ConfigModule.forRoot({ isGlobal: true, ignoreEnvFile: true, validate: () => testEnv() }),
+        TelemetryModule,
         AuthModule,
         TestFeatureModule,
       ],

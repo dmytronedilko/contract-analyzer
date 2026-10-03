@@ -9,6 +9,8 @@ import type { Env } from '../config/env.schema.js';
 import type { EmbeddingProvider } from './embedding-provider.js';
 
 import { AiProviderError } from '../common/ai-provider.error.js';
+import { COUNTERS } from '../observability/telemetry-names.js';
+import { TelemetryService } from '../telemetry/telemetry.service.js';
 
 const VOYAGE_EMBEDDINGS_URL = 'https://api.voyageai.com/v1/embeddings';
 /** Voyage accepts up to 128 inputs per request; chunks are ~300 tokens, well under its token cap. */
@@ -46,7 +48,10 @@ export class VoyageEmbeddingProvider implements EmbeddingProvider {
   private readonly apiKey: string;
   readonly model: string;
 
-  constructor(config: ConfigService<Env, true>) {
+  constructor(
+    config: ConfigService<Env, true>,
+    private readonly telemetry: TelemetryService,
+  ) {
     this.apiKey = config.get('VOYAGE_API_KEY', { infer: true });
     this.model = config.get('VOYAGE_MODEL', { infer: true });
   }
@@ -88,6 +93,12 @@ export class VoyageEmbeddingProvider implements EmbeddingProvider {
         }
         const backoff = Math.min(MAX_DELAY_MS, BASE_DELAY_MS * 2 ** (attempt - 1));
         const delayMs = error.retryAfterMs ?? backoff + Math.floor(Math.random() * 250);
+        this.telemetry.increment(COUNTERS.EMBEDDINGS_RETRIES, 'Retried Voyage embedding requests');
+        this.telemetry.captureError(error, {
+          provider: 'voyage',
+          attempt,
+          status: error.status ?? 0,
+        });
         this.logger.warn('Retrying Voyage request', {
           attempt,
           status: error.status ?? null,

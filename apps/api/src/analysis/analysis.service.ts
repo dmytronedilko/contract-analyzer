@@ -10,6 +10,8 @@ import {
   type AskResponse,
   type CompareRequest,
   type CompareResponse,
+  NOT_FOUND_COMPARE,
+  NOT_FOUND_SINGLE,
   type Source,
 } from '@repo/contracts';
 
@@ -21,6 +23,8 @@ import type { RetrievedChunk } from '../vector-store/vector-store.service.js';
 import { AuditService, type AuditActor } from '../audit/audit.service.js';
 import { DocumentsService } from '../documents/documents.service.js';
 import { EMBEDDING_PROVIDER, type EmbeddingProvider } from '../embeddings/embedding-provider.js';
+import { COUNTERS, SPANS, SUMMARIES } from '../observability/telemetry-names.js';
+import { TelemetryService } from '../telemetry/telemetry.service.js';
 import { VectorStoreService } from '../vector-store/vector-store.service.js';
 import { LlmService } from './llm.service.js';
 import {
@@ -56,6 +60,7 @@ export class AnalysisService {
     private readonly llm: LlmService,
     private readonly audit: AuditService,
     @InjectDrizzle() private readonly db: Database,
+    private readonly telemetry: TelemetryService,
     @Inject(EMBEDDING_PROVIDER) private readonly embeddings: EmbeddingProvider,
   ) {
     this.topK = config.get('RAG_TOP_K', { infer: true });
@@ -66,7 +71,7 @@ export class AnalysisService {
     const document = await this.resolveReady(actor.principal, request.documentId);
 
     const queryVector = await this.embeddings.embedQuery(request.question);
-    const sources = toSources(await this.vectorStore.search(document.id, queryVector, this.topK));
+    const sources = toSources(await this.retrieve(document.id, queryVector));
 
     const result = await this.llm.generate(
       'ask',
@@ -78,6 +83,7 @@ export class AnalysisService {
       }),
     );
 
+    this.countNotFound(result.text, NOT_FOUND_SINGLE);
     const durationMs = Math.round(performance.now() - startedAt);
     // Counts, flags and timing only: never the question or the answer.
     await this.audit.record(this.db, actor, {
@@ -110,8 +116,8 @@ export class AnalysisService {
     // Embed the query once and search both documents in parallel.
     const queryVector = await this.embeddings.embedQuery(request.query);
     const [hitsA, hitsB] = await Promise.all([
-      this.vectorStore.search(documentA.id, queryVector, this.topK),
-      this.vectorStore.search(documentB.id, queryVector, this.topK),
+      this.retrieve(documentA.id, queryVector),
+      this.retrieve(documentB.id, queryVector),
     ]);
     // Searched separately, each contract can miss a clause the other's hits contain, when its
     // wording matches the query less well. Each hit therefore also brings the most similar chunk of
@@ -143,6 +149,7 @@ export class AnalysisService {
       }),
     );
 
+    this.countNotFound(result.text, NOT_FOUND_COMPARE);
     const durationMs = Math.round(performance.now() - startedAt);
     await this.audit.record(this.db, actor, {
       action: 'analysis.compare',
@@ -172,6 +179,34 @@ export class AnalysisService {
       truncated: result.truncated,
       sources: { contractA: sourcesA, contractB: sourcesB },
     };
+  }
+
+  private retrieve(documentId: string, queryVector: number[]): Promise<RetrievedChunk[]> {
+    return this.telemetry.span(
+      SPANS.RAG_RETRIEVE,
+      async (span) => {
+        const chunks = await this.vectorStore.search(documentId, queryVector, this.topK);
+        const topSimilarity = chunks[0]?.similarity ?? 0;
+        span.addTags({ returned: chunks.length, topSimilarity });
+        this.telemetry.observe(
+          SUMMARIES.RAG_TOP_SIMILARITY,
+          topSimilarity,
+          'Similarity of the best retrieved chunk',
+        );
+        return chunks;
+      },
+      { documentId, k: this.topK },
+    );
+  }
+
+  /** The model answered with the exact "not found" sentence: retrieval missed or the text lacks it. */
+  private countNotFound(answer: string, sentence: string): void {
+    if (answer.trim() === sentence) {
+      this.telemetry.increment(
+        COUNTERS.RAG_NOT_FOUND_ANSWERS,
+        'Answers stating the retrieved excerpts lack the information',
+      );
+    }
   }
 
   /** 404 outside the caller's organization, 409 until ingestion has finished successfully. */

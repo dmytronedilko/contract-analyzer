@@ -19,6 +19,7 @@ import {
   ObserveModule,
   REDACTION_PATTERNS,
 } from './observability/observe.js';
+import { TelemetryModule } from './telemetry/telemetry.module.js';
 
 @Module({
   imports: [
@@ -67,6 +68,7 @@ import {
           }),
         ]
       : []),
+    TelemetryModule,
     AuthModule,
     AuditModule,
     DocumentsModule,

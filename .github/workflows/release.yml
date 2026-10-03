@@ -1,0 +1,85 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version to release (e.g. v1.2.0). Empty = computed from the commits.
+        type: string
+        required: false
+
+permissions: {}
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Release
+    # Releases are cut from main only; the tag goes on the current main commit.
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      INPUT_VERSION: ${{ inputs.version }}
+      REPO_URL: ${{ github.server_url }}/${{ github.repository }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: ./.github/actions/setup
+
+      - name: Version and release notes
+        id: version
+        run: |
+          set -euo pipefail
+          if [ -n "$INPUT_VERSION" ]; then
+            version="v${INPUT_VERSION#v}"
+          else
+            # The next semantic version from the commits since the last tag (v0.1.0 first).
+            version=$(pnpm exec git-cliff --bumped-version)
+          fi
+          [[ "$version" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::Invalid version: $version"; exit 1; }
+          if git rev-parse --verify --quiet "refs/tags/${version}" >/dev/null; then
+            echo "::error::${version} already exists"; exit 1
+          fi
+          pnpm exec git-cliff --unreleased --tag "$version" --strip header > "$RUNNER_TEMP/notes.md"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Create and push the annotated tag
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        # --cleanup=verbatim keeps the notes' Markdown headings, which git would otherwise strip
+        # as comments. The token is passed as a one-off header, never stored in a remote URL or git config.
+        # Release tags are protected by the tags ruleset; the GitHub Actions app is its only
+        # bypass actor, so only this workflow can create them.
+        run: |
+          set -euo pipefail
+          git -c user.name="github-actions[bot]" \
+            -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+            tag --annotate --cleanup=verbatim --file "$RUNNER_TEMP/notes.md" "$VERSION" "$GITHUB_SHA"
+          auth=$(printf 'x-access-token:%s' "$TOKEN" | base64 -w0)
+          git -c http.extraheader="AUTHORIZATION: basic ${auth}" \
+            push origin "refs/tags/${VERSION}"
+
+      - name: Create the GitHub Release
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "$VERSION" --verify-tag --title "$VERSION" \
+            --notes-file "$RUNNER_TEMP/notes.md"
+
+      - name: Summary
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          {
+            echo "### Released ${VERSION}"
+            echo
+            cat "$RUNNER_TEMP/notes.md"
+          } >> "$GITHUB_STEP_SUMMARY"

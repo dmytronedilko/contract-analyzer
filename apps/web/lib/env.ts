@@ -79,6 +79,9 @@ export const ServerEnvSchema = z.preprocess(
 
 export type ServerEnv = z.infer<typeof ServerEnvSchema>;
 
+/** Every variable the web server reads (documented on the wiki's Configuration page). */
+export const SERVER_ENV_VARIABLES = Object.keys(ServerEnvObjectSchema.shape);
+
 let cached: ServerEnv | undefined;
 
 /**

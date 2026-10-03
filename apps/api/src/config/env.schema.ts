@@ -93,4 +93,7 @@ function withoutEmptyValues(env: unknown): unknown {
 
 export const EnvSchema = z.preprocess(withoutEmptyValues, EnvObjectSchema);
 
+/** Every variable the API reads (documented on the wiki's Configuration page). */
+export const ENV_VARIABLES = Object.keys(EnvObjectSchema.shape);
+
 export type Env = z.infer<typeof EnvSchema>;

@@ -15,7 +15,8 @@
     },
     "test": {
       "dependsOn": ["^build"],
-      "env": ["TEST_DATABASE_URL"]
+      "env": ["TEST_DATABASE_URL"],
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/docs/wiki/**"]
     },
     "//#lint:repo": {
       "dependsOn": ["@repo/contracts#build", "@repo/db#build"],

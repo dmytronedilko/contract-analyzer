@@ -127,3 +127,29 @@
     @apply font-sans;
   }
 }
+
+/* Model answers rendered from markdown (components/answer/markdown-answer.tsx). */
+@layer components {
+  .prose-answer h2 {
+    @apply mt-4 text-base font-semibold;
+  }
+  .prose-answer ul {
+    @apply list-disc pl-5;
+  }
+  .prose-answer ol {
+    @apply list-decimal pl-5;
+  }
+  .prose-answer blockquote {
+    @apply border-l-2 pl-3 italic;
+  }
+  .prose-answer table {
+    @apply w-full border-collapse text-left;
+  }
+  .prose-answer th,
+  .prose-answer td {
+    @apply border px-2 py-1 align-top;
+  }
+  .prose-answer a {
+    @apply underline;
+  }
+}

@@ -32,4 +32,4 @@ Everything else (architecture, configuration, API reference, operations and secu
 
 ## License
 
-No license has been granted: all rights reserved.
+[MIT](LICENSE) © 2026 Dmytro Nedilko.

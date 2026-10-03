@@ -3,6 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "description": "NestJS + Fastify API: document ingestion, retrieval and contract analysis.",
+  "license": "MIT",
   "files": [
     "dist"
   ],

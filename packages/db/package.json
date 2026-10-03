@@ -3,6 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "description": "Database schema (app and Better Auth tables), migrations and the migrate script.",
+  "license": "MIT",
   "files": [
     "dist",
     "drizzle"

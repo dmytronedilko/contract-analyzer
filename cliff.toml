@@ -1,12 +1,15 @@
 # git-cliff configuration: GitHub Release notes generated from Conventional Commits.
+# Entries link to their commits when REPO_URL is set (e.g. https://github.com/dmytronedilko/contract-analyzer); no
+# GitHub API calls are made.
 # https://git-cliff.org/docs/configuration
 
 [changelog]
 header = ""
 body = """
 {%- macro commit_link(commit) -%}
-  {%- if remote.github.owner -%}
-    [`{{ commit.id | truncate(length=7, end="") }}`](https://github.com/{{ remote.github.owner }}/{{ remote.github.repo }}/commit/{{ commit.id }})
+  {%- set repo_url = get_env(name="REPO_URL", default="") -%}
+  {%- if repo_url -%}
+    [`{{ commit.id | truncate(length=7, end="") }}`]({{ repo_url }}/commit/{{ commit.id }})
   {%- else -%}
     `{{ commit.id | truncate(length=7, end="") }}`
   {%- endif -%}

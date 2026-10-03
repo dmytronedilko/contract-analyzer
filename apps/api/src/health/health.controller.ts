@@ -1,5 +1,6 @@
 import { Controller, Get, SerializeOptions, ServiceUnavailableException } from '@nestjs/common';
 import { InjectDrizzle } from '@nestjs/drizzle';
+import { SkipThrottle } from '@nestjs/throttler';
 import { sql } from 'drizzle-orm';
 import { z } from 'zod';
 
@@ -18,6 +19,7 @@ const READY_TIMEOUT_MS = 2_000;
  * limiting and are excluded from tracing (see the Observe `http.ignore` option).
  */
 @Public()
+@SkipThrottle()
 @Controller('health')
 export class HealthController {
   constructor(@InjectDrizzle() private readonly db: Database) {}

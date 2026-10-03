@@ -1,0 +1,6 @@
+# zizmor configuration (https://docs.zizmor.sh/configuration/).
+rules:
+  # zizmor prefers the newer `$/...` syntax for actions in this repository, which actionlint
+  # (also run in CI) doesn't accept yet. Local actions keep the `./...` form until it does.
+  self-repository:
+    disable: true

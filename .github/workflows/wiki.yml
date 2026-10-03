@@ -1,0 +1,96 @@
+name: Wiki
+
+# Publishes docs/wiki to the repository's GitHub Wiki. The wiki is a separate git repository
+# outside rulesets, CODEOWNERS and review, so it is only ever written by this workflow from main;
+# direct edits on GitHub are overwritten by the next publish.
+on:
+  push:
+    branches: [main]
+    paths:
+      - docs/wiki/**
+      - scripts/wiki/**
+      - .github/workflows/wiki.yml
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: wiki
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Publish the wiki
+    runs-on: ubuntu-latest
+    permissions:
+      # GITHUB_TOKEN can push to this repository's wiki; no personal access token is needed.
+      contents: write
+    env:
+      REPO_URL: ${{ github.server_url }}/${{ github.repository }}
+      WIKI_URL: ${{ github.server_url }}/${{ github.repository }}.wiki.git
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+      - name: Validate
+        run: node scripts/wiki/validate.mjs
+
+      - name: Publish
+        id: publish
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        # Every git command gets the token as a one-off header: it never lands in a remote URL
+        # or in git config.
+        run: |
+          set -euo pipefail
+          auth="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$TOKEN" | base64 -w0)"
+          git_auth() { git -c http.extraheader="$auth" "$@"; }
+
+          if ! git_auth ls-remote "$WIKI_URL" >/dev/null 2>&1; then
+            echo "::error::Enable the wiki and create the first page in the GitHub UI once, then re-run."
+            exit 1
+          fi
+
+          wiki="$RUNNER_TEMP/wiki"
+          git_auth clone --quiet "$WIKI_URL" "$wiki"
+          rsync -a --delete --exclude .git docs/wiki/ "$wiki/"
+
+          short_sha="${GITHUB_SHA::7}"
+          # Links to repository files use the {{repo}} placeholder. $ENV{...} is Perl's, not the
+          # shell's, and the footer's backticks are literal Markdown.
+          # shellcheck disable=SC2016
+          find "$wiki" -name '*.md' -print0 |
+            xargs -0 perl -pi -e 's/\{\{repo\}\}/$ENV{REPO_URL}/g'
+          # shellcheck disable=SC2016
+          printf 'Generated from `docs/wiki` at [%s](%s/commit/%s). Edit via pull request; direct wiki edits are overwritten.\n' \
+            "$short_sha" "$REPO_URL" "$GITHUB_SHA" > "$wiki/_Footer.md"
+
+          cd "$wiki"
+          git add --all
+          if git diff --cached --quiet; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "The wiki is already up to date."
+          else
+            git -c user.name="github-actions[bot]" \
+              -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+              commit --quiet --message "docs(wiki): sync from ${short_sha}"
+            git_auth push --quiet origin HEAD
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+          echo "pages=$(find . -maxdepth 1 -name '*.md' ! -name '_*' | wc -l | tr -d ' ')" >> "$GITHUB_OUTPUT"
+
+      - name: Summary
+        env:
+          CHANGED: ${{ steps.publish.outputs.changed }}
+          PAGES: ${{ steps.publish.outputs.pages }}
+        run: |
+          {
+            echo "### Wiki $([ "$CHANGED" = true ] && echo published || echo unchanged)"
+            echo
+            echo "- Pages: ${PAGES}"
+            echo "- Source commit: [${GITHUB_SHA::7}](${REPO_URL}/commit/${GITHUB_SHA})"
+            echo "- Wiki: ${REPO_URL}/wiki"
+          } >> "$GITHUB_STEP_SUMMARY"

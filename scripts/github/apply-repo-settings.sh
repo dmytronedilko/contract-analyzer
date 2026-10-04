@@ -188,6 +188,7 @@ selected_actions=$(jq -n '{
     "pnpm/action-setup@*",
     "dependabot/fetch-metadata@*",
     "aquasecurity/trivy-action@*",
+    "aquasecurity/setup-trivy@*",
     "raven-actions/actionlint@*",
     "zizmorcore/zizmor-action@*",
     "ossf/scorecard-action@*"

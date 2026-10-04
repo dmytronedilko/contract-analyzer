@@ -38,9 +38,9 @@ allows.
 3. **Gating variables** `CODE_SECURITY` and `SECRET_PROTECTION` (see below).
 4. **Actions policy**: only GitHub-owned actions plus an allowlist of exactly the third-party
    actions the workflows use (`docker/*` actions, `pnpm/action-setup`, `dependabot/fetch-metadata`,
-   Trivy, actionlint, zizmor, Scorecard); full-SHA pinning required; the default `GITHUB_TOKEN` is
-   read-only and can't create or approve pull requests; on public repositories, workflows from forks
-   need approval for every external contributor.
+   Trivy and the setup-trivy action it calls, actionlint, zizmor, Scorecard); full-SHA pinning
+   required; the default `GITHUB_TOKEN` is read-only and can't create or approve pull requests; on
+   public repositories, workflows from forks need approval for every external contributor.
 5. **Rulesets** from `.github/rulesets/*.json`, created or updated by name.
 
 ## Rulesets

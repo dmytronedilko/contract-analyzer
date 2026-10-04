@@ -55,8 +55,7 @@ jobs:
           TOKEN: ${{ secrets.GITHUB_TOKEN }}
         # --cleanup=verbatim keeps the notes' Markdown headings, which git would otherwise strip
         # as comments. The token is passed as a one-off header, never stored in a remote URL or git config.
-        # Release tags are protected by the tags ruleset; the GitHub Actions app is its only
-        # bypass actor, so only this workflow can create them.
+        # Release tags are protected by the release-tags ruleset: they can't be moved or deleted.
         run: |
           set -euo pipefail
           git -c user.name="github-actions[bot]" \

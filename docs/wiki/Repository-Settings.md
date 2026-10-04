@@ -60,8 +60,10 @@ There are no bypass actors.
 **`release-tags`** ([`tags.json`]({{repo}}/blob/main/.github/rulesets/tags.json)) protects
 `refs/tags/v*` against creation, update and deletion. The GitHub Actions app is the only bypass
 actor, so release tags can only be created by the Release workflow and never moved or deleted. If
-GitHub rejects that bypass actor for the repository, the script allows repository admins instead,
-says so in its summary, and the Release workflow's tag push then needs an admin's token.
+GitHub rejects that bypass actor for the repository (personal repositories may), the script makes
+repository admins the bypass actor and drops the creation rule, and says so in its summary: the
+Release workflow can still create tags, anyone with write access could too, and only admins can
+move or delete them.
 
 ## Gating variables
 

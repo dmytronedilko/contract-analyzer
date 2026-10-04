@@ -73,11 +73,11 @@ On public repositories both are `'true'`.
 
 ## Release
 
-Run **Actions → Release → Run workflow** on `main`. It
-computes the next version from the Conventional Commits since the last tag (the first release is
-`v0.1.0`; a `version` input overrides it), creates an annotated tag with the release notes, creates
-and the GitHub Release. Release tags are
-protected: only this workflow can create them, and nobody can move or delete them. There is no
+Run **Actions → Release → Run workflow** on `main`. It computes the next version from the
+Conventional Commits since the last tag (a `version` input overrides it), then creates an annotated
+tag with the release notes and the GitHub Release. Release tags are protected by the `release-tags`
+ruleset: they can't be moved or deleted (see
+[Repository settings](Repository-Settings#rulesets) for who may create them). There is no
 `CHANGELOG` file; releases are the changelog. See
 [Development workflow](Development-Workflow#releases).
 

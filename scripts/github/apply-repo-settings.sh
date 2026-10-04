@@ -245,13 +245,14 @@ for file in "$ROOT"/.github/rulesets/*.json; do
     applied "ruleset ${name}"
   elif jq -e --argjson app "$GITHUB_ACTIONS_APP_ID" \
     '.bypass_actors | any(.actor_type == "Integration" and .actor_id == $app)' <<<"$body" >/dev/null; then
-    # Some repositories don't accept the GitHub Actions app as a bypass actor; allow repository
-    # admins instead (Release workflow tags would then need an admin token).
-    body=$(jq --argjson role "$REPOSITORY_ADMIN_ROLE_ID" \
-      '.bypass_actors = [{actor_id: $role, actor_type: "RepositoryRole", bypass_mode: "always"}]' <<<"$body")
+    # Some repositories (personal ones, for example) don't accept the GitHub Actions app as a
+    # bypass actor. Repository admins bypass instead, and creation is no longer blocked, so the
+    # Release workflow can still create tags; only admins can move or delete them.
+    body=$(jq --argjson role "$REPOSITORY_ADMIN_ROLE_ID" '
+      .bypass_actors = [{actor_id: $role, actor_type: "RepositoryRole", bypass_mode: "always"}]
+      | .rules |= map(select(.type != "creation"))' <<<"$body")
     if apply_ruleset "$body"; then
-      applied "ruleset ${name} (repository admins bypass: the GitHub Actions app wasn't accepted)"
-      manual "Release tags: the Actions app can't bypass ${name}; see Repository-Settings on the wiki"
+      applied "ruleset ${name} (the GitHub Actions app wasn't accepted: admins bypass, creation allowed)"
     else
       skipped "ruleset ${name} (rejected; see the error above)"
     fi
